@@ -3,7 +3,14 @@ const express = require("express");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    "https://shivaganga6264.github.io",
+    "https://sheshield-umu1.onrender.com"
+  ],
+  methods: ["POST", "GET"],
+  allowedHeaders: ["Content-Type"]
+}));
 app.use(express.json());
 
 const port = process.env.PORT || 5000;
@@ -58,5 +65,6 @@ Total path points: ${path.length}`;
 });
 
 app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
+
 
 
