@@ -1,4 +1,4 @@
-require("dotenv").config();
+ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
@@ -52,8 +52,8 @@ app.post("/api/emergency", async (req, res) => {
 
     console.log("Received:", latitude, longitude, uid);
 
-    // FETCH ALL USER LOCATIONS
-    const usersSnapshot = await db.collection("users-locations").get();
+    // FETCH ALL USER LOCATIONS (FIXED COLLECTION NAME)
+    const usersSnapshot = await db.collection("locations").get();
 
     const nearbyUsers = [];
 
@@ -61,7 +61,7 @@ app.post("/api/emergency", async (req, res) => {
       if (doc.id === uid) return; // skip unsafe user
 
       const data = doc.data();
-      if (!data.latitude || !data.longitude || !data.phoneNumber) return;
+      if (!data.latitude || !data.longitude) return;
 
       const dist = haversineKm(
         latitude,
@@ -71,7 +71,10 @@ app.post("/api/emergency", async (req, res) => {
       );
 
       if (dist <= 1) {
-        nearbyUsers.push(data.phoneNumber);
+        // Only push numbers that exist (after Step-4)
+        if (data.phoneNumber) {
+          nearbyUsers.push(data.phoneNumber);
+        }
       }
     });
 
@@ -102,6 +105,8 @@ app.post("/api/emergency", async (req, res) => {
 app.listen(process.env.PORT || 5000, () =>
   console.log("Server running")
 );
+
+
 
 
 
