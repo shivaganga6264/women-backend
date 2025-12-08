@@ -1,70 +1,109 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const admin = require("firebase-admin");
+const twilio = require("twilio");
 
 const app = express();
-app.use(cors({
-  origin: [
-    "https://shivaganga6264.github.io",
-    "https://sheshield-umu1.onrender.com"
-  ],
-  methods: ["POST", "GET"],
-  allowedHeaders: ["Content-Type"]
-}));
+app.use(cors());
 app.use(express.json());
 
-const port = process.env.PORT || 5000;
+// FIREBASE ADMIN INITIALIZATION
+const saBase64 = process.env.FIREBASE_SERVICE_ACCOUNT;
+const serviceAccount = JSON.parse(Buffer.from(saBase64, "base64").toString("utf8"));
 
-// Twilio Config
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioFrom = process.env.TWILIO_PHONE_NUMBER;
-const client = require("twilio")(accountSid, authToken);
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
+const db = admin.firestore();
+
+// TWILIO SETUP
+const client = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+// HAVERSINE DISTANCE FORMULA
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const toRad = (x) => x * Math.PI / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// EMERGENCY ENDPOINT
 app.post("/api/emergency", async (req, res) => {
   try {
-    console.log("BODY RECEIVED:", req.body);
+    const { latitude, longitude, uid } = req.body;
 
-    const { path, phoneNumbers } = req.body;
-
-    if (!path || path.length === 0 || !phoneNumbers || phoneNumbers.length === 0) {
-      return res.status(400).send("Missing location or phone numbers");
+    if (!latitude || !longitude || !uid) {
+      return res.status(400).send("Invalid request: missing fields");
     }
 
-    const last = path[path.length - 1];
-    const mapsLink = `https://www.google.com/maps?q=${last.latitude},${last.longitude}`;
+    console.log("Received:", latitude, longitude, uid);
 
-    const message = `🚨 Emergency Alert!
-Last location: ${last.latitude},${last.longitude}
-Map: ${mapsLink}
-Total path points: ${path.length}`;
+    // FETCH ALL USER LOCATIONS
+    const usersSnapshot = await db.collection("users-locations").get();
 
-    // Send SMS
-    for (const num of phoneNumbers) {
-      await client.messages.create({
-        from: twilioFrom,
-        to: num,
-        body: message
-      });
+    const nearbyUsers = [];
+
+    usersSnapshot.forEach((doc) => {
+      if (doc.id === uid) return; // skip unsafe user
+
+      const data = doc.data();
+      if (!data.latitude || !data.longitude || !data.phoneNumber) return;
+
+      const dist = haversineKm(
+        latitude,
+        longitude,
+        data.latitude,
+        data.longitude
+      );
+
+      if (dist <= 1) {
+        nearbyUsers.push(data.phoneNumber);
+      }
+    });
+
+    console.log("Nearby users:", nearbyUsers);
+
+    if (nearbyUsers.length === 0) {
+      return res.send("No users within 1km.");
     }
 
-    // Call
-    for (const num of phoneNumbers) {
+    // CALL ALL NEARBY USERS
+    for (const number of nearbyUsers) {
       await client.calls.create({
-        from: twilioFrom,
-        to: num,
-        twiml: `<Response><Say>${message}</Say></Response>`
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: number,
+        twiml: `<Response><Say>Emergency alert! A nearby user needs help.</Say></Response>`
       });
     }
 
-    res.send("Emergency alert sent successfully.");
+    res.send(`Alert sent to ${nearbyUsers.length} users.`);
+
   } catch (err) {
-    console.error("Backend Error:", err);
-    res.status(500).send("Backend failed: " + err.message);
+    console.error(err);
+    res.status(500).send("Server error: " + err.message);
   }
 });
 
-app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
+// START SERVER
+app.listen(process.env.PORT || 5000, () =>
+  console.log("Server running")
+);
+
+
 
 
 
