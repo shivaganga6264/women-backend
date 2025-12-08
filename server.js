@@ -9,8 +9,8 @@ app.use(cors());
 app.use(express.json());
 
 // FIREBASE ADMIN INITIALIZATION
-const saBase64 = process.env.FIREBASE_SERVICE_ACCOUNT;
-const serviceAccount = JSON.parse(Buffer.from(saBase64, "base64").toString("utf8"));
+ const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -105,6 +105,7 @@ app.post("/api/emergency", async (req, res) => {
 app.listen(process.env.PORT || 5000, () =>
   console.log("Server running")
 );
+
 
 
 
