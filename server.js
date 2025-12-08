@@ -53,7 +53,7 @@ app.post("/api/emergency", async (req, res) => {
     console.log("Received:", latitude, longitude, uid);
 
     // FETCH ALL USER LOCATIONS (FIXED COLLECTION NAME)
-    const usersSnapshot = await db.collection("locations").get();
+    const usersSnapshot = await db.collection("usersLocation").get();
 
     const nearbyUsers = [];
 
@@ -105,6 +105,7 @@ app.post("/api/emergency", async (req, res) => {
 app.listen(process.env.PORT || 5000, () =>
   console.log("Server running")
 );
+
 
 
 
