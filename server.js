@@ -7,6 +7,8 @@ const twilio = require("twilio");
 const app = express();
 app.use(cors());
 app.use(express.json());
+console.log("SERVICE ACCOUNT RAW:", process.env.FIREBASE_SERVICE_ACCOUNT);
+console.log("TYPE:", typeof process.env.FIREBASE_SERVICE_ACCOUNT);
 
 // FIREBASE ADMIN INITIALIZATION
  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -105,6 +107,7 @@ app.post("/api/emergency", async (req, res) => {
 app.listen(process.env.PORT || 5000, () =>
   console.log("Server running")
 );
+
 
 
 
