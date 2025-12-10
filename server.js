@@ -7,12 +7,9 @@ const twilio = require("twilio");
 const app = express();
 app.use(cors());
 app.use(express.json());
-console.log("SERVICE ACCOUNT RAW:", process.env.FIREBASE_SERVICE_ACCOUNT);
-console.log("TYPE:", typeof process.env.FIREBASE_SERVICE_ACCOUNT);
 
 // FIREBASE ADMIN INITIALIZATION
- const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -37,8 +34,8 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) ** 2;
+    Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) ** 2;
 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
@@ -46,37 +43,39 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 // EMERGENCY ENDPOINT
 app.post("/api/emergency", async (req, res) => {
   try {
-    const { latitude, longitude, uid } = req.body;
+    let { latitude, longitude, uid } = req.body;
 
-    if (!latitude || !longitude || !uid) {
+    if (latitude === undefined || longitude === undefined || !uid) {
       return res.status(400).send("Invalid request: missing fields");
     }
 
+    // Convert to numbers
+    latitude = Number(latitude);
+    longitude = Number(longitude);
+
     console.log("Received:", latitude, longitude, uid);
 
-    // FETCH ALL USER LOCATIONS (FIXED COLLECTION NAME)
     const usersSnapshot = await db.collection("usersLocation").get();
-
     const nearbyUsers = [];
 
     usersSnapshot.forEach((doc) => {
-      if (doc.id === uid) return; // skip unsafe user
+      if (doc.id === uid) return;
 
       const data = doc.data();
-      if (!data.latitude || !data.longitude) return;
+
+      if (!data.latitude || !data.longitude || !data.phoneNumber) {
+        return; // skip invalid docs
+      }
 
       const dist = haversineKm(
         latitude,
         longitude,
-        data.latitude,
-        data.longitude
+        Number(data.latitude),
+        Number(data.longitude)
       );
 
       if (dist <= 1) {
-        // Only push numbers that exist (after Step-4)
-        if (data.phoneNumber) {
-          nearbyUsers.push(data.phoneNumber);
-        }
+        nearbyUsers.push(data.phoneNumber);
       }
     });
 
@@ -91,12 +90,12 @@ app.post("/api/emergency", async (req, res) => {
       await client.calls.create({
         from: process.env.TWILIO_PHONE_NUMBER,
         to: number,
-        twiml: `<Response><Say>Emergency alert! A nearby user needs help.</Say></Response>`
+        twiml:
+          `<Response><Say>Emergency alert! A nearby user needs help.</Say></Response>`,
       });
     }
 
     res.send(`Alert sent to ${nearbyUsers.length} users.`);
-
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error: " + err.message);
@@ -105,8 +104,10 @@ app.post("/api/emergency", async (req, res) => {
 
 // START SERVER
 app.listen(process.env.PORT || 5000, () =>
-  console.log("Server running")
+  console.log("🚀 Server running")
 );
+
+
 
 
 
