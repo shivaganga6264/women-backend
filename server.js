@@ -1,11 +1,10 @@
- require("dotenv").config();
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const twilio = require("twilio");
 
 const app = express();
 
-// CORS
 app.use(cors({
   origin: [
     "https://shivaganga6264.github.io",
@@ -17,79 +16,89 @@ app.use(cors({
 
 app.use(express.json());
 
-// PORT
 const PORT = process.env.PORT || 5000;
 
-// TWILIO CONFIG
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
 
 const TWILIO_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+const CHILD_EMERGENCY_NUMBER = "+919133042642"; // Twilio-verified
 
-// ============================
-// EMERGENCY ENDPOINT
-// ============================
+/* ============================
+   UNSAFE BUTTON API
+============================ */
 app.post("/api/emergency", async (req, res) => {
-  try {
-    console.log("REQUEST:", req.body);
+  const { path, phoneNumbers } = req.body;
 
-    const { path, phoneNumbers } = req.body;
+  if (!Array.isArray(path) || path.length === 0)
+    return res.status(400).send("Location path missing");
 
-    if (!Array.isArray(path) || path.length === 0) {
-      return res.status(400).send("Location path missing");
-    }
+  const last = path[path.length - 1];
+  const map = `https://www.google.com/maps?q=${last.latitude},${last.longitude}`;
 
-    if (!Array.isArray(phoneNumbers) || phoneNumbers.length === 0) {
-      return res.status(400).send("Emergency contacts missing");
-    }
-
-    const last = path[path.length - 1];
-    const mapsLink = `https://www.google.com/maps?q=${last.latitude},${last.longitude}`;
-
-    const smsText = `🚨 EMERGENCY ALERT
-Last location:
+  const sms = `🚨 EMERGENCY ALERT
+Location:
 ${last.latitude}, ${last.longitude}
-Map:
-${mapsLink}`;
+${map}`;
 
-    // SEND SMS
-    for (const number of phoneNumbers) {
-      await client.messages.create({
-        from: TWILIO_NUMBER,
-        to: number,
-        body: smsText
-      });
-    }
+  for (const num of phoneNumbers) {
+    await client.messages.create({
+      from: TWILIO_NUMBER,
+      to: num,
+      body: sms
+    });
 
-    // MAKE CALL (SHORT MESSAGE ONLY)
-    for (const number of phoneNumbers) {
-      await client.calls.create({
-        from: TWILIO_NUMBER,
-        to: number,
-        twiml: `
-          <Response>
-            <Say voice="alice">
-              Emergency alert. Please check your SMS for live location.
-            </Say>
-          </Response>
-        `
-      });
-    }
-
-    res.send("Emergency SMS and calls sent successfully");
-
-  } catch (error) {
-    console.error("ERROR:", error);
-    res.status(500).send("Emergency service failed");
+    await client.calls.create({
+      from: TWILIO_NUMBER,
+      to: num,
+      twiml: `<Response><Say>Emergency alert. Please check your SMS.</Say></Response>`
+    });
   }
+
+  res.send("Emergency contacts alerted successfully");
 });
 
-// START SERVER
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+/* ============================
+   CHILD HELP API
+============================ */
+app.post("/api/childhelp", async (req, res) => {
+  const { latitude, longitude } = req.body;
+
+  if (!latitude || !longitude)
+    return res.status(400).send("Location missing");
+
+  const map = `https://www.google.com/maps?q=${latitude},${longitude}`;
+
+  const msg = `🚨 CHILD HELP ALERT
+Location:
+${latitude}, ${longitude}
+${map}`;
+
+  await client.messages.create({
+    from: TWILIO_NUMBER,
+    to: CHILD_EMERGENCY_NUMBER,
+    body: msg
+  });
+
+  await client.calls.create({
+    from: TWILIO_NUMBER,
+    to: CHILD_EMERGENCY_NUMBER,
+    twiml: `<Response><Say>Child emergency alert. Location sent.</Say></Response>`
+  });
+
+  res.send("Child emergency contact alerted");
 });
+
+/* ============================
+   START SERVER
+============================ */
+app.listen(PORT, () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);
+
+
 
 
 
